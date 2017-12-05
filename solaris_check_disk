@@ -1,6 +1,25 @@
 #!/bin/bash
 
-set -x
+#
+# solaris_check_disk
+# Checks specified partition for usage and responds
+# with exit code based on warning and critical thresholds
+# provided by nagios.
+#
+# Copyright 2017, Scott Groel, Clemson University ACI
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 WARNING_T=0
 CRITICAL_T=0
@@ -11,12 +30,14 @@ usage() {
     echo -e '\n-w <value> Warning threshold\n-c <value> Critical threshold\n-p <partition> Target Partition'	
 }
 
+# We expect 3 flags and 3 values for a total of 6 items on commandline
 if [[ $# != 6 ]]; then
     /bin/echo "Incorrect input, exiting"
     usage
     exit 3
 fi
 
+#Cycle and read in threshold values and target partition
 while [[ $# -gt 1 ]]
 do
     key="$1"
@@ -42,6 +63,13 @@ do
     shift
 done
 
+#Warning level must be higher than critical. Expected values are for disk space remaining
+if [ "$WARNING_T" -lt "$CRITICAL_T" ]; then
+	echo "ERROR: Warning threshold lower than Critical Threshold."
+	exit 3
+fi
+
+#Gather disk stats real quick, using -h for human readable output when reporting space back to user
 STATS=$(df -h / | awk '{print $2,$3,$4,$5}' | grep -v Size)
 SIZE=$(echo $STATS | awk '{print $1}')
 USED=$(echo $STATS | awk '{print $2}')
@@ -50,6 +78,7 @@ PERCENT=$(echo $STATS | awk '{print $4}')
 PERCENT_TR=$(echo $STATS | awk '{print $4}' | tr -d '%')
 PERCENT_FREE=$((100 - $PERCENT_TR))
 
+#LOGIC! exit 0 normal, exit 1 warning, exit 2 critica;, exit 3 error
 if [ "$PERCENT_FREE" -gt "$WARNING_T" ]; then
 	echo "DISK OK; Size=$SIZE, Used=$USED, Free=$FREE; Percentage Used=$PERCENT"
 	exit 0
@@ -59,4 +88,7 @@ elif [[ "$PERCENT_FREE" -le "$WARNING_T" && "$PERCENT_FREE" -gt "$CRITICAL_T" ]]
 elif [ "$PERCENT_FREE" -le "$CRITICAL_T" ]; then
 	echo "DISK CRITICAL; Size=$SIZE, Used=$USED, Free=$FREE; Percentage Used=$PERCENT"
 	exit 2
+else
+	echo "UNKNOWN ERROR: CONTACT DEVELOPER"
+	exit 3
 fi
