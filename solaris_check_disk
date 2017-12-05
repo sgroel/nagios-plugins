@@ -1,0 +1,62 @@
+#!/bin/bash
+
+set -x
+
+WARNING_T=0
+CRITICAL_T=0
+PART=""
+
+usage() {
+    echo -e '\nExample: "/nagios/remote_disk -w 20 -c 10 -p /'
+    echo -e '\n-w <value> Warning threshold\n-c <value> Critical threshold\n-p <partition> Target Partition'	
+}
+
+if [[ $# != 6 ]]; then
+    /bin/echo "Incorrect input, exiting"
+    usage
+    exit 3
+fi
+
+while [[ $# -gt 1 ]]
+do
+    key="$1"
+
+    case $key in
+        -h)
+            usage
+            exit
+        ;;
+        -w)
+            shift # past argument
+            WARNING_T=$1
+        ;;
+        -c)
+            shift
+            CRITICAL_T=$1
+        ;;
+        -p)
+            shift # past argument
+            PART=$1
+        ;;
+    esac
+    shift
+done
+
+STATS=$(df -h / | awk '{print $2,$3,$4,$5}' | grep -v Size)
+SIZE=$(echo $STATS | awk '{print $1}')
+USED=$(echo $STATS | awk '{print $2}')
+FREE=$(echo $STATS | awk '{print $3}')
+PERCENT=$(echo $STATS | awk '{print $4}')
+PERCENT_TR=$(echo $STATS | awk '{print $4}' | tr -d '%')
+PERCENT_FREE=$((100 - $PERCENT_TR))
+
+if [ "$PERCENT_FREE" -gt "$WARNING_T" ]; then
+	echo "DISK OK; Size=$SIZE, Used=$USED, Free=$FREE; Percentage Used=$PERCENT"
+	exit 0
+elif [[ "$PERCENT_FREE" -le "$WARNING_T" && "$PERCENT_FREE" -gt "$CRITICAL_T" ]]; then
+	echo "DISK WARNING; Size=$SIZE, Used=$USED, Free=$FREE; Percentage Used=$PERCENT"
+	exit 1
+elif [ "$PERCENT_FREE" -le "$CRITICAL_T" ]; then
+	echo "DISK CRITICAL; Size=$SIZE, Used=$USED, Free=$FREE; Percentage Used=$PERCENT"
+	exit 2
+fi
